@@ -2,8 +2,8 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import HomeScreen from './src/screens/HomeScreen';
-import FullscreenImageScreen from './src/screens/FullscreenImageScreen';
+import HomeScreen from './src/screens/Home/HomeScreen';
+import FullscreenImageScreen from './src/screens/Home/FullscreenImageScreen';
 
 const Stack = createStackNavigator();
 

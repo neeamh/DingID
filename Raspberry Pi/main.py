@@ -27,7 +27,7 @@ firebase_admin.initialize_app(cred, {
 bucket = storage.bucket()
 db = firestore.client()
 
-# Preload the DeepFace model (this time, we're just loading it to speed up the first call)
+# Preload the DeepFace model
 model_name = "Facenet512"
 
 # Step 1: Load embeddings and labels from Firestore
@@ -47,7 +47,6 @@ def load_faces_from_firestore():
         for image_doc in images_collection:
             image_data = image_doc.to_dict()
             if 'embedding' in image_data:
-                # Append the embedding and corresponding label
                 embeddings.append(np.array(image_data['embedding']))
                 labels.append(label)
     
@@ -71,59 +70,60 @@ def log_detection_to_firestore(label, confidence):
         "confidence": confidence * 100,
         "timestamp": firestore.SERVER_TIMESTAMP
     })
-    
     print(f"Logged detection: {label} with {confidence * 100:.2f}% confidence")
 
-# Step 4: Function to save image to Firebase Storage and Firestore
-# Step 4: Function to save image to Firebase Storage and Firestore
+# Step 4: Function to save image and embeddings to Firebase
 def save_image_to_firebase(image, label, collection="faces", embedding=None, is_recognized=True):
     image_name = f"{uuid.uuid4()}.jpg"
 
+    # Adjust the path for unrecognized images
     if is_recognized:
-        # Save recognized faces in the specific directory for that face label (e.g., "faces/Neeam/")
         image_path = f"{collection}/{label}/{image_name}"
     else:
-        # Save unrecognized faces in a separate "unrecognized" directory
-        image_path = f"unrecognized/{image_name}"
+        image_path = f"unrecognized_images/{image_name}"  # Store unrecognized images in a separate directory
 
-    # Convert the image back to BGR before saving
+    # Convert the image from RGB to BGR properly
     image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
+    
     # Encode the image as JPEG to a byte array
     _, image_encoded = cv2.imencode('.jpg', image_bgr)
     image_bytes = image_encoded.tobytes()
 
-    # Upload the image directly to Firebase Storage
+    # Upload the image to Firebase Storage
     blob = bucket.blob(image_path)
     blob.upload_from_string(image_bytes, content_type='image/jpeg')
     blob.make_public()
     image_url = blob.public_url
 
-    # Save the image URL and embedding to Firestore
-    image_data = {
-        "image_url": image_url,
-        "timestamp": firestore.SERVER_TIMESTAMP
-    }
+    # Prepare Firestore data only if embedding exists
+    if embedding is not None and isinstance(embedding, np.ndarray):
+        image_data = {
+            "image_url": image_url,
+            "timestamp": firestore.SERVER_TIMESTAMP,
+            "embedding": embedding.tolist()
+        }
 
-    if embedding is not None:
-        image_data["embedding"] = embedding  # No need to call tolist()
-
-    if is_recognized:
-        # Save the image under the "images" subcollection for the recognized face
-        doc_ref = db.collection(collection).document(label).collection("images").document(str(uuid.uuid4()))
-        doc_ref.set(image_data)
+        # Save in Firestore under the correct label
+        if is_recognized:
+            doc_ref = db.collection(collection).document(label).collection("images").document(str(uuid.uuid4()))
+            doc_ref.set(image_data)
+            print(f"Saved recognized image to Firebase Storage and Firestore for {label} with embedding")
+        else:
+            # Store unrecognized images with embedding separately
+            doc_ref = db.collection("unrecognized_images").document(str(uuid.uuid4()))
+            doc_ref.set(image_data)
+            print(f"Saved unrecognized image to Firestore with embedding")
     else:
-        # Store directly under the "Unknown" collection with the image URL and timestamp
-        doc_ref = db.collection(collection).document("Unknown").collection("unrecognized_images").document(str(uuid.uuid4()))
-        doc_ref.set(image_data)
+        print("No valid embedding found; not saving to Firestore.")
 
-    print(f"Saved image to Firebase Storage and Firestore for {label}")
-# Step 5: Cosine Similarity Check
+    return image_url  # Return the image URL
+
+# Function to check cosine similarity
 def cosine_similarity_check(embedding, known_embeddings, threshold=0.7):
     """Check if the cosine similarity between the embedding and any known embeddings exceeds the threshold."""
     similarities = cosine_similarity([embedding], known_embeddings)
     max_similarity = np.max(similarities)
-    
+
     if max_similarity >= threshold:
         return True, max_similarity
     return False, max_similarity
@@ -134,11 +134,11 @@ last_detection_times = {}
 
 # Step 6: Initialize webcam for real-time recognition
 video_capture = cv2.VideoCapture(0)
-similarity_threshold = 0.70  # Adjust this threshold for stricter or looser matching
+similarity_threshold = 0.70
 
 frame_count = 0
-frame_interval = 5  # Process every 5th frame
-save_interval = timedelta(minutes=10)  # Save an image or detection only every 10 minutes
+frame_interval = 5
+save_interval = timedelta(minutes=10)
 
 def predict_identity(embedding):
     """Predict the identity of a face based on its embedding using the trained SVM."""
@@ -146,16 +146,14 @@ def predict_identity(embedding):
     probability = classifier.predict_proba([embedding])
     predicted_label = label_encoder.inverse_transform(prediction)[0]
     confidence = np.max(probability)
-    
+
     # Perform a cosine similarity check
     is_similar, similarity_score = cosine_similarity_check(embedding, embeddings, threshold=similarity_threshold)
-    
-    # Set a threshold for confidence and similarity; if below, return "Unknown"
-    confidence_threshold = 0.60  # Adjust this threshold as needed
-    
+
+    confidence_threshold = 0.60
     if confidence < confidence_threshold or not is_similar:
         return "Unknown", confidence
-    
+
     return predicted_label, confidence
 
 while True:
@@ -167,64 +165,89 @@ while True:
         break
 
     if frame_count % frame_interval == 0:
-        # Convert the frame to RGB (DeepFace expects RGB input)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         try:
-            # Detect faces in the current frame using a faster backend
+            # Detect faces in the current frame
             faces = DeepFace.extract_faces(img_path=rgb_frame, detector_backend='retinaface', enforce_detection=False)
 
-            for face in faces:
-                # Extract the bounding box coordinates
-                x, y, w, h = face['facial_area']['x'], face['facial_area']['y'], face['facial_area']['w'], face['facial_area']['h']
+            if not faces or len(faces) == 0:
+                print("Warning: No faces detected in the frame.")
+                continue
 
-                # Crop the detected face directly from the frame for embedding
+            for face in faces:
+                x, y, w, h = face['facial_area']['x'], face['facial_area']['y'], face['facial_area']['w'], face['facial_area']['h']
                 detected_face = rgb_frame[y:y+h, x:x+w]
 
-                # Compute the embedding for the detected face directly from the live frame
-                detected_face_embedding = DeepFace.represent(img_path=detected_face, model_name=model_name, enforce_detection=False)[0]["embedding"]
+                # Check if the detected face is valid and large enough for processing
+                if detected_face.size == 0:
+                    print("Warning: Detected face has zero size, skipping.")
+                    continue
 
-                # Predict the identity using the SVM classifier with cosine similarity check
-                predicted_identity, confidence = predict_identity(detected_face_embedding)
+                try:
+                    # Compute the embedding for the detected face
+                    embeddings_result = DeepFace.represent(img_path=detected_face, model_name=model_name, enforce_detection=False)
 
-                # Log the detection to Firestore every 10 minutes
-                now = datetime.now()
-                last_detection_time = last_detection_times.get(predicted_identity, datetime.min)
+                    if not embeddings_result or len(embeddings_result) == 0:
+                        print("Warning: Failed to generate embedding, skipping. Detected face shape:", detected_face.shape)
+                        continue
 
-                if predicted_identity != "Unknown" and now - last_detection_time > save_interval:
-                    log_detection_to_firestore(predicted_identity, confidence)
-                    last_detection_times[predicted_identity] = now
+                    # Extract the embedding
+                    detected_face_embedding = embeddings_result[0].get("embedding")
 
-                # Determine the label to display and handle saving to Firebase
-                if predicted_identity == "Unknown":
-                    label = "Unknown"
-                    color = (255, 0, 0)  # Blue color for "Unknown"
-                    save_image_to_firebase(cv2.cvtColor(detected_face, cv2.COLOR_RGB2BGR), label, is_recognized=False)
-                else:
-                    label = f"{predicted_identity} ({confidence * 100:.2f}%)"
-                    color = (0, 255, 0)  # Green color for known faces
+                    # Ensure the embedding is valid and is a list
+                    if detected_face_embedding is None or len(detected_face_embedding) == 0 or not isinstance(detected_face_embedding, list):
+                        print("Warning: Invalid or empty embedding, skipping.")
+                        continue
 
-                    # Check if we should save the image
-                    last_save_time = last_save_times.get(predicted_identity, datetime.min)
+                    # Proceed with recognized and unrecognized logic
+                    predicted_identity, confidence = predict_identity(np.array(detected_face_embedding))
 
-                    if now - last_save_time > save_interval:
-                        save_image_to_firebase(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), predicted_identity, embedding=detected_face_embedding)
-                        last_save_times[predicted_identity] = now
+                    now = datetime.now()
+                    last_detection_time = last_detection_times.get(predicted_identity, datetime.min)
 
-                # Draw bounding box and label for the detected face
-                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-                cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                    if predicted_identity != "Unknown" and now - last_detection_time > save_interval:
+                        log_detection_to_firestore(predicted_identity, confidence)
+                        last_detection_times[predicted_identity] = now
+
+                    if predicted_identity == "Unknown":
+                        label = "Unknown"
+                        color = (255, 0, 0)
+
+                        # Save the image and embedding to Firebase only if a valid embedding exists
+                        image_url = save_image_to_firebase(
+                            cv2.cvtColor(detected_face, cv2.COLOR_RGB2BGR),
+                            label,
+                            is_recognized=False,
+                            embedding=np.array(detected_face_embedding)
+                        )
+
+                    else:
+                        label = f"{predicted_identity} ({confidence * 100:.2f}%)"
+                        color = (0, 255, 0)
+                        last_save_time = last_save_times.get(predicted_identity, datetime.min)
+
+                        if now - last_save_time > save_interval:
+                            save_image_to_firebase(
+                                cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
+                                predicted_identity,
+                                embedding=np.array(detected_face_embedding)
+                            )
+                            last_save_times[predicted_identity] = now
+
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+                    cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+
+                except Exception as e:
+                    print(f"Error during embedding or prediction: {e}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error during face detection: {e}")
 
-    # Display the resulting frame
     cv2.imshow('Video', frame)
 
-    # Break the loop on 'q' key press
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the webcam and close windows
 video_capture.release()
 cv2.destroyAllWindows()

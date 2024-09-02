@@ -9,3 +9,5 @@ faces/
 test.py
 
 .git/gc.log
+
+.DS_Store

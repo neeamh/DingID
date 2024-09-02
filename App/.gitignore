@@ -35,3 +35,9 @@ yarn-error.*
 *.tsbuildinfo
 
 ./firebase/firebase.js
+
+.env
+
+.DS_Store
+assets/ellipsis-vertical.svg
+package-lock.json
