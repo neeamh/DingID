@@ -1,72 +1,82 @@
-import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { getFirestore, collection, getDocs, query, where, doc } from "firebase/firestore";
 import { app } from './firebase.js';
 
 const db = getFirestore(app);
 
 async function retrieveKnownFaces() {
-    const facesData = {};
-  
-    try {
-        // Get all documents in the 'faces' collection
-        const facesSnapshot = await getDocs(collection(db, "faces"));
-  
-        // Iterate over each document in the 'faces' collection
-        for (const faceDoc of facesSnapshot.docs) {
-            if(faceDoc.id !== 'Unknown'){
-                const label = faceDoc.id; // The document ID is the label name
-  
-                // Get the 'embeddings' subcollection for this face
-                const embeddingsSnapshot = await getDocs(collection(db, `faces/${label}/images`));
-      
-                // Initialize the list of image URLs for this label
-                const imageURLs = [];
-      
-                // Iterate over each document in the 'embeddings' subcollection
-                embeddingsSnapshot.forEach((embeddingDoc) => {
-                    const embeddingData = embeddingDoc.data();
-                    const imageUrl = embeddingData.image_url;
-                    if (imageUrl) {
-                        imageURLs.push(imageUrl);
-                    }
-                });
-      
-                // Store the label and corresponding image URLs in the facesData object
-                facesData[label] = imageURLs;
+  const facesData = {};
 
-            }
+  try {
+    const facesSnapshot = await getDocs(collection(db, "faces"));
 
-        }
-  
-        // Return the constructed object
-        return facesData;
-    } catch (error) {
-        console.error('Error retrieving face data:', error);
+    for (const faceDoc of facesSnapshot.docs) {
+      if (faceDoc.id !== 'Unknown') {
+        const label = faceDoc.id;
+        const embeddingsSnapshot = await getDocs(collection(db, `faces/${label}/images`));
+        const imageURLs = [];
+
+        embeddingsSnapshot.forEach((embeddingDoc) => {
+          const embeddingData = embeddingDoc.data();
+          const imageUrl = embeddingData.image_url;
+          if (imageUrl) {
+            imageURLs.push(imageUrl);
+          }
+        });
+
+        facesData[label] = imageURLs;
+      }
     }
+
+    return facesData;
+  } catch (error) {
+    console.error('Error retrieving face data:', error);
+  }
 }
+
 
 async function retrieveUnknownFaces() {
-    const unknownFacesData = [];
-  
-    try {
-        // Get all documents in the 'unrecognized_images' subcollection under the 'Unknown' document
-        const unknownSnapshot = await getDocs(collection(db, "faces/Unknown/unrecognized_images"));
-  
-        // Iterate over each document in the 'unrecognized_images' subcollection
-        unknownSnapshot.forEach((doc) => {
-            const docData = doc.data();
-            const imageUrl = docData.image_url;
-            const timestamp = docData.timestamp;
-            if (imageUrl && timestamp) {
-                unknownFacesData.push({ imageUrl, timestamp });
-            }
-        });
-  
-        // Return the array of unknown face data (image URLs and timestamps)
-        return unknownFacesData;
-    } catch (error) {
-        console.error('Error retrieving unknown face data:', error);
-    }
+  const unknownFacesData = [];
+
+  try {
+    const unknownSnapshot = await getDocs(collection(db, "unrecognized_images"));
+
+    unknownSnapshot.forEach((doc) => {
+      const docData = doc.data();
+      const imageUrl = docData.image_url;
+      const timestamp = docData.timestamp;
+      if (imageUrl && timestamp) {
+        unknownFacesData.push({ imageUrl, timestamp });
+      }
+    });
+
+    return unknownFacesData;
+  } catch (error) {
+    console.error('Error retrieving unknown face data:', error);
+  }
 }
+
+// Updated Function to Retrieve Profile Data
+export async function retrieveProfileData(profileName) {
+  const profileImagesRef = collection(db, `faces/${profileName}/images`);
+  const detectionsRef = collection(db, 'detections');
   
+  // Query to get the detection logs that match the profile name
+  const detectionsQuery = query(detectionsRef, where('label', '==', profileName));
+  const logsSnapshot = await getDocs(detectionsQuery);
+  const imagesSnapshot = await getDocs(profileImagesRef);
+
+  const detectionLogs = logsSnapshot.docs.map(doc => doc.data());
+  const profileImages = imagesSnapshot.docs.map(doc => doc.data().image_url);
+
+  // Assuming the banner image is the most recent image
+  const bannerImage = profileImages[0];
+
+  return {
+    detectionLogs,
+    profileImages,
+    bannerImage,
+  };
+}
+
 // Export the functions to be used in your app
 export { retrieveKnownFaces, retrieveUnknownFaces };

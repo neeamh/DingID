@@ -14,10 +14,17 @@
     "@react-navigation/stack": "^6.4.1",
     "dotenv": "^16.4.5",
     "expo": "~51.0.28",
+    "expo-image-picker": "~15.0.7",
     "expo-status-bar": "~1.12.1",
     "firebase": "^10.13.0",
     "react": "18.2.0",
     "react-native": "0.74.5",
+    "react-native-config": "^1.5.3",
+    "react-native-dotenv": "^3.4.11",
+    "react-native-fast-image": "^8.6.3",
+    "react-native-gesture-handler": "^2.19.0",
+    "react-native-modal": "^13.0.1",
+    "react-native-reanimated": "^3.15.1",
     "react-native-vector-icons": "^10.1.0"
   },
   "devDependencies": {
