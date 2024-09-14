@@ -1,84 +1,128 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, Image, FlatList, TouchableOpacity, Dimensions, Animated } from 'react-native';
+// src/screens/ProfileScreen.js
+
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  FlatList,
+  TouchableOpacity,
+  Dimensions,
+  Animated,
+  Platform,
+  StatusBar,
+} from 'react-native';
 import { retrieveProfileData } from '../../firebase/firestoreConfig';
+import FastImage from 'expo-fast-image'; // Ensure correct import
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const screenWidth = Dimensions.get('window').width;
+const statusBarHeight = Platform.OS === 'ios' ? 20 : StatusBar.currentHeight || 0;
 const numColumns = 3;
-const imageMargin = 10;
+const imageMargin = 2;
 const imageSize = (screenWidth - (numColumns + 1) * imageMargin) / numColumns;
-const initialBannerHeight = 200; // Initial height of the banner image
+const initialBannerHeight = 250;
 
-export default function ProfileScreen({ route }) {
+export default function ProfileScreen({ route, navigation }) {
   const { profileName } = route.params;
   const [detectionLogs, setDetectionLogs] = useState([]);
   const [profileImages, setProfileImages] = useState([]);
   const [bannerImage, setBannerImage] = useState(null);
-  const scrollY = useRef(new Animated.Value(0)).current; // Animated value to track scroll position
+  const [fullDetectionLogs, setFullDetectionLogs] = useState([]);
+  const [fullProfileImages, setFullProfileImages] = useState([]);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     async function fetchProfileData() {
-      const data = await retrieveProfileData(profileName);
-      setDetectionLogs(data.detectionLogs);
-      setProfileImages(data.profileImages);
-      setBannerImage(data.bannerImage);
+      try {
+        const data = await retrieveProfileData(profileName);
+        setDetectionLogs(data.detectionLogs.slice(0, 6));
+        setProfileImages(data.profileImages.slice(0, 12));
+        setBannerImage(data.bannerImage);
+        setFullDetectionLogs(data.detectionLogs);
+        setFullProfileImages(data.profileImages);
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+      }
     }
     fetchProfileData();
   }, [profileName]);
 
-  const renderLogItem = ({ item }) => (
-    <View style={styles.logItem}>
-      <Text style={styles.logText}>{new Date(item.timestamp.toDate()).toLocaleString()}</Text>
-    </View>
-  );
+  const renderLogItem = useCallback(({ item }) => {
+    let displayDate = 'Unknown Date';
+    let displayTime = 'Unknown Time';
 
-  const renderImageItem = ({ item }) => (
-    <Image source={{ uri: item }} style={styles.profileImage} />
-  );
+    if (item.timestamp) {
+      const date = new Date(item.timestamp);
+      displayDate = date.toLocaleDateString();
+      displayTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
 
-  const renderAddPhotoButton = () => (
-    <TouchableOpacity style={styles.addPhotoButton}>
-      <Text style={styles.addPhotoText}>+</Text>
-    </TouchableOpacity>
-  );
-
-  const renderProfileContent = () => (
-    <>
-      <View style={styles.infoContainer}>
-        <Text style={styles.heading}>{profileName}</Text>
-        <Text style={styles.subHeading}>Detection Logs</Text>
-        {detectionLogs.map((log, index) => (
-          <View key={index} style={styles.logItem}>
-            <Text style={styles.logText}>{new Date(log.timestamp.toDate()).toLocaleString()}</Text>
-          </View>
-        ))}
+    return (
+      <View style={styles.logItem}>
+        <View style={styles.logItemLeft}>
+          <Text style={styles.logDate}>{displayDate}</Text>
+          <Text style={styles.logTime}>{displayTime}</Text>
+        </View>
+        <View style={styles.logItemRight}>
+          <Text style={styles.logConfidence}>{item.confidence ? `${item.confidence.toFixed(2)}%` : 'N/A'}</Text>
+        </View>
       </View>
-      <View style={styles.imagesContainer}>
-        <Text style={styles.subHeading}>Profile Images</Text>
-        <FlatList
-          data={[{ isAddButton: true }, ...profileImages]}
-          renderItem={({ item }) =>
-            item.isAddButton ? renderAddPhotoButton() : renderImageItem({ item })
-          }
-          keyExtractor={(item, index) => index.toString()}
-          numColumns={numColumns}
-          contentContainerStyle={styles.grid}
-        />
-      </View>
-    </>
-  );
+    );
+  }, []);
 
-  // Adjust header height and content scale to create the parallax effect
-  const headerHeight = scrollY.interpolate({
-    inputRange: [-initialBannerHeight, 0, 200],
-    outputRange: [initialBannerHeight * 1.5, initialBannerHeight, initialBannerHeight],
+  const renderImageItem = useCallback(({ item }) => {
+    return (
+      <FastImage
+        source={{ uri: item.imageUrl }}
+        style={styles.profileImage}
+      />
+    );
+  }, []);
+
+  const headerBackgroundColor = scrollY.interpolate({
+    inputRange: [0, initialBannerHeight - 50],
+    outputRange: ['transparent', '#1c1b29'],
     extrapolate: 'clamp',
   });
 
-  const contentScale = scrollY.interpolate({
-    inputRange: [0, initialBannerHeight],
-    outputRange: [1, 0.9], // Shrinks content size as you scroll
+  const headerTitleOpacity = scrollY.interpolate({
+    inputRange: [initialBannerHeight - 70, initialBannerHeight - 30],
+    outputRange: [0, 1],
     extrapolate: 'clamp',
   });
+
+  const renderProfileContent = useCallback(() => {
+    return (
+      <View style={styles.contentContainer}>
+        <View style={styles.imagesContainer}>
+          <TouchableOpacity style={styles.subHeading} onPress={() => navigation.navigate('AllProfileImages', 
+          { profileImages: fullProfileImages })}>
+            <Text style={styles.subHeadingText}>Profile Images</Text>
+            <Ionicons style={styles.forwardIcon}name="chevron-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+          <FlatList
+            data={profileImages} // Removed the placeholder item
+            renderItem={({ item }) => renderImageItem({ item })}
+            keyExtractor={(item, index) => index.toString()}
+            numColumns={numColumns}
+            contentContainerStyle={styles.grid}
+          />
+        </View>
+        <View style={styles.infoContainer}>
+          <TouchableOpacity style={styles.subHeading} onPress={() => navigation.navigate('AllDetectionLogs', { detectionLogs: fullDetectionLogs })}>
+            <Text style={styles.subHeadingText}>Detection Logs</Text>
+            <Ionicons style={styles.forwardIcon}name="chevron-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+          <FlatList
+            data={detectionLogs}
+            renderItem={renderLogItem}
+            keyExtractor={(item, index) => index.toString()}
+          />
+        </View>
+      </View>
+    );
+  }, [detectionLogs, profileImages]);
 
   return (
     <View style={styles.container}>
@@ -88,93 +132,155 @@ export default function ProfileScreen({ route }) {
           style={[
             styles.bannerImage,
             {
-              height: headerHeight,
-              transform: [{ translateY: scrollY.interpolate({ inputRange: [0, initialBannerHeight], outputRange: [0, -initialBannerHeight / 2], extrapolate: 'clamp' }) }],
+              height: initialBannerHeight,
+              transform: [
+                {
+                  translateY: scrollY.interpolate({
+                    inputRange: [0, initialBannerHeight],
+                    outputRange: [0, -initialBannerHeight / 2],
+                    extrapolate: 'clamp',
+                  }),
+                },
+              ],
             },
           ]}
+          resizeMode="cover"
         />
       )}
+      <Animated.View style={[styles.header, { backgroundColor: headerBackgroundColor }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Ionicons style={styles.backIcon}name="chevron-back" size={24} color="#fff" />
+          <Text style={styles.heading}> 
+            {profileName}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
       <Animated.FlatList
         data={[{ key: 'content' }]}
         renderItem={renderProfileContent}
         keyExtractor={(item) => item.key}
-        contentContainerStyle={[styles.contentContainer, { transform: [{ scale: contentScale }] }]}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
-        ListHeaderComponent={<View style={{ height: initialBannerHeight }} />} // Placeholder for banner image
+        ListHeaderComponent={<View style={{ height: initialBannerHeight }} />}
+        contentContainerStyle={styles.flatListContent}
       />
     </View>
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2c2b34',
+    backgroundColor: '#1c1b29',
+  },
+  header: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    height: 70 + statusBarHeight, // Increase height to accommodate padding
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingTop: statusBarHeight, // Add padding to the top
+  },
+  backButton: {
+    marginRight: 10,
+    flexDirection: "row",
+  },
+  backIcon: {
+    marginTop: 2,
   },
   contentContainer: {
+    backgroundColor: '#1c1b29',
+  },
+  flatListContent: {
     paddingBottom: 20,
-    backgroundColor: '#2c2b34',
   },
   bannerImage: {
     position: 'absolute',
     width: '100%',
-    resizeMode: 'cover',
     top: 0,
     zIndex: -1,
-  },
-  infoContainer: {
-    padding: 20,
   },
   heading: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
     color: "#fff",
-    textAlign: 'center',
   },
   subHeading: {
-    fontSize: 18,
+    flexDirection: "row",
+  },
+  subHeadingText: {
+    fontSize: 22,
     fontWeight: '600',
-    color: '#b0b0b0',
+    color: '#fff',
     marginBottom: 10,
+    paddingLeft: 10,
   },
-  logItem: {
-    paddingVertical: 10,
-    borderBottomColor: '#444',
-    borderBottomWidth: 1,
+  forwardIcon: {
+    marginTop: 5,
   },
-  logText: {
-    color: '#b0b0b0',
-    fontSize: 16,
+  infoContainer: {
+    paddingTop: 20,
+    paddingHorizontal: 10,
   },
   imagesContainer: {
-    paddingVertical: 10,
+    paddingTop: 20,
   },
   grid: {
     justifyContent: 'center',
     paddingHorizontal: imageMargin / 2,
   },
   profileImage: {
-    width: imageSize + 5,
-    height: imageSize + 5,
-    borderRadius: 8,
+    width: imageSize,
+    height: imageSize,
     margin: imageMargin / 2,
   },
   addPhotoButton: {
-    width: imageSize + 5,
-    height: imageSize + 5,
-    borderRadius: 8,
+    width: imageSize,
+    height: imageSize,
+    borderRadius: 10,
     margin: imageMargin / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#555',
+    backgroundColor: '#2e2d3a',
   },
   addPhotoText: {
     fontSize: 36,
     color: '#fff',
+  },
+  logItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#2e2d3a',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+  },
+  logItemLeft: {
+    flexDirection: 'column',
+  },
+  logDate: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logTime: {
+    color: '#a0a0a0',
+    fontSize: 14,
+  },
+  logItemRight: {
+    justifyContent: 'center',
+  },
+  logConfidence: {
+    color: '#4caf50',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

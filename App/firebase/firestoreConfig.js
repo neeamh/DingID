@@ -3,11 +3,12 @@ import { app } from './firebase.js';
 
 const db = getFirestore(app);
 
+// Functions to retrieve data
 async function retrieveKnownFaces() {
   const facesData = {};
 
   try {
-    const facesSnapshot = await getDocs(collection(db, "faces"));
+    const facesSnapshot = await getDocs(collection(db, 'faces'));
 
     for (const faceDoc of facesSnapshot.docs) {
       if (faceDoc.id !== 'Unknown') {
@@ -33,12 +34,11 @@ async function retrieveKnownFaces() {
   }
 }
 
-
 async function retrieveUnknownFaces() {
   const unknownFacesData = [];
 
   try {
-    const unknownSnapshot = await getDocs(collection(db, "unrecognized_images"));
+    const unknownSnapshot = await getDocs(collection(db, 'unrecognized_images'));
 
     unknownSnapshot.forEach((doc) => {
       const docData = doc.data();
@@ -55,27 +55,52 @@ async function retrieveUnknownFaces() {
   }
 }
 
-// Updated Function to Retrieve Profile Data
 export async function retrieveProfileData(profileName) {
   const profileImagesRef = collection(db, `faces/${profileName}/images`);
   const detectionsRef = collection(db, 'detections');
-  
-  // Query to get the detection logs that match the profile name
-  const detectionsQuery = query(detectionsRef, where('label', '==', profileName));
-  const logsSnapshot = await getDocs(detectionsQuery);
-  const imagesSnapshot = await getDocs(profileImagesRef);
 
-  const detectionLogs = logsSnapshot.docs.map(doc => doc.data());
-  const profileImages = imagesSnapshot.docs.map(doc => doc.data().image_url);
+  try {
+    // Query to get the detection logs that match the profile name
+    const detectionsQuery = query(detectionsRef, where('label', '==', profileName));
+    const [logsSnapshot, imagesSnapshot] = await Promise.all([
+      getDocs(detectionsQuery),
+      getDocs(profileImagesRef),
+    ]);
 
-  // Assuming the banner image is the most recent image
-  const bannerImage = profileImages[0];
+    const detectionLogs = logsSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      // Convert Timestamp to ISO string
+      const timestamp = data.timestamp ? data.timestamp.toDate().toISOString() : null;
+      return {
+        ...data,
+        timestamp,
+      };
+    });
 
-  return {
-    detectionLogs,
-    profileImages,
-    bannerImage,
-  };
+    const profileImages = imagesSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        imageUrl: data.image_url, // Ensure this matches your Firestore field
+        timestamp: data.timestamp ? data.timestamp.toMillis() : null,
+      };
+    });
+
+    // Ensure bannerImage is set correctly
+    const bannerImage = profileImages.length > 0 ? profileImages[0].imageUrl : null;
+
+    return {
+      detectionLogs,
+      profileImages,
+      bannerImage,
+    };
+  } catch (error) {
+    console.error('Error retrieving profile data:', error);
+    return {
+      detectionLogs: [],
+      profileImages: [],
+      bannerImage: null,
+    };
+  }
 }
 
 // Export the functions to be used in your app

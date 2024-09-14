@@ -1,26 +1,39 @@
 // src/screens/HomeScreen.js
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, Image, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, SafeAreaView, TouchableOpacity } from 'react-native';
 import { retrieveKnownFaces } from '../../firebase/firestoreConfig';
 import { StatusBar } from 'expo-status-bar';
 import LiveVideoFeed from '../components/liveFeed';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import FastImage from 'expo-fast-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function HomeScreen({ navigation }) {
-  const colorScheme = "dark"; 
+  const colorScheme = 'dark';
   const [mostFrequentProfiles, setMostFrequentProfiles] = useState([]);
 
   useEffect(() => {
     async function fetchData() {
-      const knownData = await retrieveKnownFaces();
-      const knownProfilesArray = Object.keys(knownData).map((label) => ({
-        label,
-        urls: knownData[label],
-        type: 'known',
-      }));
+      try {
+        const cachedData = await AsyncStorage.getItem('mostFrequentProfiles');
+        if (cachedData) {
+          setMostFrequentProfiles(JSON.parse(cachedData));
+        } else {
+          const knownData = await retrieveKnownFaces();
+          const knownProfilesArray = Object.keys(knownData).map((label) => ({
+            label,
+            urls: knownData[label],
+            type: 'known',
+          }));
 
-      const sortedProfiles = [...knownProfilesArray].sort((a, b) => b.urls.length - a.urls.length);
-      setMostFrequentProfiles(sortedProfiles.slice(0, 5)); 
+          const sortedProfiles = [...knownProfilesArray].sort((a, b) => b.urls.length - a.urls.length);
+          const topProfiles = sortedProfiles.slice(0, 5);
+          setMostFrequentProfiles(topProfiles);
+          await AsyncStorage.setItem('mostFrequentProfiles', JSON.stringify(topProfiles));
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
     }
 
     fetchData();
@@ -28,20 +41,23 @@ export default function HomeScreen({ navigation }) {
 
   const dynamicStyles = colorScheme === 'dark' ? styles.dark : styles.light;
 
-  const renderProfileCover = ({ item }) => (
+  const renderProfileCover = useCallback(({ item }) => (
     <View style={styles.profileContainer}>
       <TouchableOpacity onPress={() => navigation.navigate('Profile', { profileName: item.label })}>
-        <Image source={{ uri: item.urls[0] }} style={styles.coverPhoto} />
+        <FastImage
+          source={{ uri: item.urls[0] }}
+          style={styles.coverPhoto}
+        />
         <Text style={[styles.profileName, dynamicStyles.text]}>{item.label}</Text>
       </TouchableOpacity>
     </View>
-  );
+  ), [navigation]);
 
   return (
     <SafeAreaView style={[styles.safeArea, dynamicStyles.safeArea]}>
       <Text style={styles.textTitle}>Live Feed</Text>
       <LiveVideoFeed />
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.peopleHeader}
         onPress={() => navigation.navigate('PeopleScreen')}
       >
@@ -56,7 +72,6 @@ export default function HomeScreen({ navigation }) {
           horizontal
           showsHorizontalScrollIndicator={false}
         />
-
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </View>
     </SafeAreaView>
@@ -104,13 +119,6 @@ const styles = StyleSheet.create({
   },
   arrowIcon: {
     marginBottom: 6,
-  },
-  liveFeedTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    paddingVertical: 10,
-    paddingLeft: 20,
   },
   dark: {
     safeArea: {

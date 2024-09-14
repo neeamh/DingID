@@ -1,29 +1,42 @@
 // src/screens/UnknownProfileScreen.js
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, FlatList, Image, Dimensions, SafeAreaView } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { StyleSheet, View, FlatList, SafeAreaView, Dimensions } from 'react-native'; // Added Dimensions import
 import { retrieveUnknownFaces } from '../../firebase/firestoreConfig';
-
-const screenWidth = Dimensions.get('window').width;
-const imageMargin = 10;
-const imageSize = (screenWidth - (3 + 1) * imageMargin) / 3; // Calculate size for a grid with 3 columns
+import FastImage from 'expo-fast-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function UnknownProfileScreen() {
   const [unknownImages, setUnknownImages] = useState([]);
 
   useEffect(() => {
     async function fetchUnknownData() {
-      const unknownFacesData = await retrieveUnknownFaces();
-      setUnknownImages(unknownFacesData.map(face => face.imageUrl)); // Map unknown faces to their image URLs
+      try {
+        const cachedData = await AsyncStorage.getItem('unknownFaces');
+        if (cachedData) {
+          setUnknownImages(JSON.parse(cachedData));
+        } else {
+          const unknownFacesData = await retrieveUnknownFaces();
+          const images = unknownFacesData.map((face) => face.imageUrl);
+          setUnknownImages(images);
+          await AsyncStorage.setItem('unknownFaces', JSON.stringify(images));
+        }
+      } catch (error) {
+        console.error('Error fetching unknown faces:', error);
+      }
     }
 
     fetchUnknownData();
   }, []);
 
-  const renderImageItem = ({ item }) => (
+  const renderImageItem = useCallback(({ item }) => (
     <View style={styles.imageContainer}>
-      <Image source={{ uri: item }} style={styles.profileImage} />
+      <FastImage
+        source={{ uri: item }}
+        style={styles.profileImage}
+        resizeMode="cover" // Changed to string value
+      />
     </View>
-  );
+  ), []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -37,6 +50,10 @@ export default function UnknownProfileScreen() {
     </SafeAreaView>
   );
 }
+
+const screenWidth = Dimensions.get('window').width;
+const imageMargin = 10;
+const imageSize = (screenWidth - (3 + 1) * imageMargin) / 3; // Calculate size for a grid with 3 columns
 
 const styles = StyleSheet.create({
   container: {
@@ -54,6 +71,6 @@ const styles = StyleSheet.create({
     width: imageSize,
     height: imageSize,
     borderRadius: 8,
-    resizeMode: 'cover',
+    // No need to set resizeMode here; it's set in the FastImage component
   },
 });
