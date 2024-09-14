@@ -1,12 +1,11 @@
-import { getFirestore, collection, getDocs, query, where, doc } from "firebase/firestore";
-import { app } from './firebase.js';
+import { getFirestore, collection, getDocs, getDoc, query, where, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { app } from './firebase.js'; //from firebase config, not tracked
 
 const db = getFirestore(app);
 
 // Functions to retrieve data
-async function retrieveKnownFaces() {
+export async function retrieveKnownFaces() {
   const facesData = {};
-
   try {
     const facesSnapshot = await getDocs(collection(db, 'faces'));
 
@@ -31,10 +30,12 @@ async function retrieveKnownFaces() {
     return facesData;
   } catch (error) {
     console.error('Error retrieving face data:', error);
+    return facesData; // Return empty object on error
   }
 }
 
-async function retrieveUnknownFaces() {
+
+export async function retrieveUnknownFaces() {
   const unknownFacesData = [];
 
   try {
@@ -45,7 +46,8 @@ async function retrieveUnknownFaces() {
       const imageUrl = docData.image_url;
       const timestamp = docData.timestamp;
       if (imageUrl && timestamp) {
-        unknownFacesData.push({ imageUrl, timestamp });
+        // Include the document ID in the returned data
+        unknownFacesData.push({ id: doc.id, imageUrl, timestamp });
       }
     });
 
@@ -103,5 +105,34 @@ export async function retrieveProfileData(profileName) {
   }
 }
 
-// Export the functions to be used in your app
-export { retrieveKnownFaces, retrieveUnknownFaces };
+export async function moveUnknownFaceToProfile(profileName, face) {
+  try {
+    // Step 1: Get the document from 'unrecognized_images' collection
+    const docRef = doc(db, 'unrecognized_images', face.id);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      console.error(`Document with ID ${face.id} does not exist in 'unrecognized_images'.`);
+      return;
+    }
+
+    // Step 2: Get the document data
+    const data = docSnap.data();
+
+    // Step 3: Create or update the profile document with the 'label' field
+    const profileDocRef = doc(db, `faces/${profileName}`);
+    await setDoc(profileDocRef, { label: profileName }, { merge: true }); // Add the label field to the profile document
+
+    // Step 4: Add the document to the 'faces/{profileName}/images' collection
+    const newDocRef = doc(db, `faces/${profileName}/images`, face.id);
+    await setDoc(newDocRef, data);
+    console.log(`Document moved to 'faces/${profileName}/images' with ID ${face.id}.`);
+
+    // Step 5: Delete the original document from 'unrecognized_images'
+    await deleteDoc(docRef);
+    console.log(`Original document deleted from 'unrecognized_images' with ID ${face.id}.`);
+  } catch (error) {
+    console.error(`Error moving document: ${error.message}`);
+    throw error;
+  }
+}

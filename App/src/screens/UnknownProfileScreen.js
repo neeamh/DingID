@@ -1,11 +1,12 @@
 // src/screens/UnknownProfileScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { StyleSheet, View, FlatList, SafeAreaView, Dimensions } from 'react-native'; // Added Dimensions import
+import { StyleSheet, Text, View, FlatList, SafeAreaView, Dimensions, TouchableOpacity } from 'react-native'; // Added Dimensions import
 import { retrieveUnknownFaces } from '../../firebase/firestoreConfig';
 import FastImage from 'expo-fast-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
-export default function UnknownProfileScreen() {
+export default function UnknownProfileScreen({ navigation }) {
   const [unknownImages, setUnknownImages] = useState([]);
 
   useEffect(() => {
@@ -39,7 +40,15 @@ export default function UnknownProfileScreen() {
   ), []);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <SafeAreaView>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.peopleHeader} onPress={() => navigation.goBack()}>
+            <Ionicons style={styles.arrowIcon} name="chevron-back-outline" color="#FFFFFF" size={20} />
+            <Text style={styles.textTitle}>Unknown</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
       <FlatList
         data={unknownImages}
         renderItem={renderImageItem}
@@ -47,7 +56,7 @@ export default function UnknownProfileScreen() {
         numColumns={3}
         contentContainerStyle={styles.grid}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -60,6 +69,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0c0b1a',
     padding: 10,
+  },
+  peopleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  arrowIcon: {
+    marginLeft: 5,
+  },
+  textTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    paddingLeft: 10,
   },
   grid: {
     justifyContent: 'center',

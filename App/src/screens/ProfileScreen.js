@@ -1,5 +1,3 @@
-// src/screens/ProfileScreen.js
-
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   StyleSheet,
@@ -13,7 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { retrieveProfileData } from '../../firebase/firestoreConfig';
-import FastImage from 'expo-fast-image'; // Ensure correct import
+import FastImage from 'expo-fast-image'; 
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const screenWidth = Dimensions.get('window').width;
@@ -86,23 +84,19 @@ export default function ProfileScreen({ route, navigation }) {
     extrapolate: 'clamp',
   });
 
-  const headerTitleOpacity = scrollY.interpolate({
-    inputRange: [initialBannerHeight - 70, initialBannerHeight - 30],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
   const renderProfileContent = useCallback(() => {
     return (
       <View style={styles.contentContainer}>
         <View style={styles.imagesContainer}>
-          <TouchableOpacity style={styles.subHeading} onPress={() => navigation.navigate('AllProfileImages', 
-          { profileImages: fullProfileImages })}>
+          <TouchableOpacity
+            style={styles.subHeading}
+            onPress={() => navigation.navigate('AllProfileImages', { profileImages: fullProfileImages })}
+          >
             <Text style={styles.subHeadingText}>Profile Images</Text>
-            <Ionicons style={styles.forwardIcon}name="chevron-forward" size={20} color="#fff" />
+            <Ionicons style={styles.forwardIcon} name="chevron-forward" size={20} color="#fff" />
           </TouchableOpacity>
           <FlatList
-            data={profileImages} // Removed the placeholder item
+            data={profileImages} 
             renderItem={({ item }) => renderImageItem({ item })}
             keyExtractor={(item, index) => index.toString()}
             numColumns={numColumns}
@@ -110,9 +104,12 @@ export default function ProfileScreen({ route, navigation }) {
           />
         </View>
         <View style={styles.infoContainer}>
-          <TouchableOpacity style={styles.subHeading} onPress={() => navigation.navigate('AllDetectionLogs', { detectionLogs: fullDetectionLogs })}>
+          <TouchableOpacity
+            style={styles.subHeading}
+            onPress={() => navigation.navigate('AllDetectionLogs', { detectionLogs: fullDetectionLogs })}
+          >
             <Text style={styles.subHeadingText}>Detection Logs</Text>
-            <Ionicons style={styles.forwardIcon}name="chevron-forward" size={20} color="#fff" />
+            <Ionicons style={styles.forwardIcon} name="chevron-forward" size={20} color="#fff" />
           </TouchableOpacity>
           <FlatList
             data={detectionLogs}
@@ -149,15 +146,13 @@ export default function ProfileScreen({ route, navigation }) {
       )}
       <Animated.View style={[styles.header, { backgroundColor: headerBackgroundColor }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Ionicons style={styles.backIcon}name="chevron-back" size={24} color="#fff" />
-          <Text style={styles.heading}> 
-            {profileName}
-          </Text>
+          <Ionicons style={styles.backIcon} name="chevron-back" size={24} color="#fff" />
+          <Text style={styles.heading}>{profileName}</Text>
         </TouchableOpacity>
       </Animated.View>
       <Animated.FlatList
         data={[{ key: 'content' }]}
-        renderItem={renderProfileContent}
+        renderItem={({ item }) => renderProfileContent()} // Ensure this is correctly passed
         keyExtractor={(item) => item.key}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],

@@ -125,11 +125,10 @@ def save_image_to_firebase_async(image, label, collection="faces", embedding=Non
         else:
             image_path = f"unrecognized_images/{image_name}"  # Store unrecognized images in a separate directory
 
-        # Convert the image from RGB (DeepFace output) to BGR properly
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert to RGB format
-
-        # Encode the image as JPEG to a byte array
-        _, image_encoded = cv2.imencode('.jpg', image_rgb)  # Encode in RGB
+        # Remove the incorrect color conversion
+        # The image is already in BGR format as read by OpenCV; we need to keep it in this format for correct display.
+        # Simply encode the image to JPEG.
+        _, image_encoded = cv2.imencode('.jpg', image)  # Encode directly in BGR format
         image_bytes = image_encoded.tobytes()
 
         # Upload the image to Firebase Storage
@@ -271,7 +270,7 @@ while True:
 
                         if now - last_save_time > save_interval:
                             save_image_to_firebase_async(
-                                cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
+                                cv2.cvtColor(detected_face, cv2.COLOR_RGB2BGR),
                                 predicted_identity,
                                 embedding=detected_face_embedding
                             )

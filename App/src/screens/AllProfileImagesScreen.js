@@ -29,8 +29,8 @@ export default function AllProfileImagesScreen({ route, navigation }) {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#fff" />
+          <Text style={styles.heading}>Profile Images</Text>
         </TouchableOpacity>
-        <Text style={styles.heading}>Profile Images</Text>
       </View>
       <FlatList
         data={profileImages}
@@ -49,14 +49,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c1b29',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'start',
     paddingTop: 60,
     paddingHorizontal: 10,
     paddingBottom: 10,
     backgroundColor: '#1c1b29',
   },
   backButton: {
+    flexDirection: 'row',
     marginRight: 10,
   },
   heading: {
