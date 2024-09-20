@@ -9,6 +9,7 @@ import UnknownProfileScreen from './src/screens/UnknownProfileScreen';
 import AllDetectionLogsScreen from './src/screens/AllDetectionLogsScreen';
 import AllProfileImagesScreen from './src/screens/AllProfileImagesScreen';
 import CreateProfileScreen from './src/screens/CreateProfileScreen';
+import FullscreenImageScreen from './src/screens/FullscreenImageScreen';
 
 const Stack = createStackNavigator();
 
@@ -23,6 +24,7 @@ export default function App() {
         <Stack.Screen name="AllProfileImages" component={AllProfileImagesScreen} options={{ headerShown: false }}/>
         <Stack.Screen name="AllDetectionLogs" component={AllDetectionLogsScreen} options={{ headerShown: false }}/>
         <Stack.Screen name="CreateProfile" component={CreateProfileScreen} options={{ headerShown: false }}/>
+        <Stack.Screen name="FullScreenImage" component={FullscreenImageScreen} options={{ headerShown: false }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -119,9 +119,8 @@ def save_image_to_firebase_async(image, label, collection="faces", embedding=Non
     def task():
         image_name = f"{uuid.uuid4()}.jpg"
 
-        # Adjust the path for unrecognized images
         if is_recognized:
-            image_path = f"{collection}/{label}/{image_name}"
+            image_path = f"{collection}/{image_name}"
         else:
             image_path = f"unrecognized_images/{image_name}"  # Store unrecognized images in a separate directory
 

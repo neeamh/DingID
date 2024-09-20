@@ -34,6 +34,7 @@ export default function ProfileScreen({ route, navigation }) {
     async function fetchProfileData() {
       try {
         const data = await retrieveProfileData(profileName);
+        console.log(data)
         setDetectionLogs(data.detectionLogs.slice(0, 6));
         setProfileImages(data.profileImages.slice(0, 12));
         setBannerImage(data.bannerImage);
@@ -70,11 +71,19 @@ export default function ProfileScreen({ route, navigation }) {
   }, []);
 
   const renderImageItem = useCallback(({ item }) => {
+    console.log(item)
     return (
-      <FastImage
-        source={{ uri: item.imageUrl }}
-        style={styles.profileImage}
-      />
+      <TouchableOpacity
+        onPress={() =>
+          navigation.navigate('FullScreenImage', {
+            imageUrl: item.imageUrl,
+            profileName: profileName,
+            id: item.id, // Pass the ID
+          })
+        }
+      >
+        <FastImage source={{ uri: item.imageUrl }} style={styles.profileImage} />
+      </TouchableOpacity>
     );
   }, []);
 
@@ -90,8 +99,7 @@ export default function ProfileScreen({ route, navigation }) {
         <View style={styles.imagesContainer}>
           <TouchableOpacity
             style={styles.subHeading}
-            onPress={() => navigation.navigate('AllProfileImages', { profileImages: fullProfileImages })}
-          >
+            onPress={() => navigation.navigate('AllProfileImages', { profileImages: fullProfileImages })}>
             <Text style={styles.subHeadingText}>Profile Images</Text>
             <Ionicons style={styles.forwardIcon} name="chevron-forward" size={20} color="#fff" />
           </TouchableOpacity>

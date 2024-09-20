@@ -16,26 +16,30 @@ export default function HomeScreen({ navigation }) {
     async function fetchData() {
       try {
         const cachedData = await AsyncStorage.getItem('mostFrequentProfiles');
-        if (cachedData) {
-          setMostFrequentProfiles(JSON.parse(cachedData));
-        } else {
-          const knownData = await retrieveKnownFaces();
-          const knownProfilesArray = Object.keys(knownData).map((label) => ({
-            label,
-            urls: knownData[label],
-            type: 'known',
-          }));
-
-          const sortedProfiles = [...knownProfilesArray].sort((a, b) => b.urls.length - a.urls.length);
-          const topProfiles = sortedProfiles.slice(0, 5);
+        let knownData = await retrieveKnownFaces();
+  
+        const knownProfilesArray = Object.keys(knownData).map((label) => ({
+          label,
+          urls: knownData[label],
+          type: 'known',
+        }));
+  
+        const sortedProfiles = knownProfilesArray.sort((a, b) => b.urls.length - a.urls.length);
+        const topProfiles = sortedProfiles.slice(0, 5);
+  
+        // If there's no cached data or the length has changed, update the cache
+        if (!cachedData || JSON.parse(cachedData).length !== topProfiles.length) {
           setMostFrequentProfiles(topProfiles);
           await AsyncStorage.setItem('mostFrequentProfiles', JSON.stringify(topProfiles));
+        } else {
+          // Use the cached data if it's the same length
+          setMostFrequentProfiles(JSON.parse(cachedData));
         }
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     }
-
+  
     fetchData();
   }, []);
 

@@ -28,6 +28,7 @@ export default function CreateProfileScreen({ navigation }) {
   }, []);
 
   const handleFaceSelect = (face) => {
+    console.log(face)
     if (selectedFaces.includes(face)) {
       setSelectedFaces(selectedFaces.filter((f) => f.id !== face.id)); // Deselect the face by unique ID
     } else {
